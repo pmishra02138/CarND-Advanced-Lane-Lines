@@ -87,22 +87,44 @@ def sliding_window(binary_warped):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
+    # Visualize lanes and fitted polynomial
+    plot_lanes(out_img, ploty, left_fitx, right_fitx)
+
     # Define y-value where we want radius of curvature
     # I'll choose the maximum y-value, corresponding to the bottom of the image
+    left_rad, right_rad = calculate_curvature(ploty, left_fitx, right_fitx)
+
+    print(round(left_rad,2), 'km', round(right_rad, 2), 'km')
+
+def calculate_curvature(ploty, left_fitx, right_fitx):
+
+    # Define y-value where we want radius of curvature
+    # Choose the maximum y-value, corresponding to the bottom of the image
     y_eval = np.max(ploty)
 
     # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30/(720*1000) # kilo meters per pixel in y dimension
-    xm_per_pix = 3.7/(700*1000) # kilo meters per pixel in x dimension
+    ykm_per_pix = 30/(720*1000) # kilometers per pixel in y dimension
+    xkm_per_pix = 3.7/(700*1000) # kilometers per pixel in x dimension
 
     # Fit new polynomials to x,y in world space
-    left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
+    left_fit_cr = np.polyfit(ploty*ykm_per_pix, left_fitx*xkm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty*ykm_per_pix, right_fitx*xkm_per_pix, 2)
     # Calculate the new radii of curvature
-    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-    # Now our radius of curvature is in meters
-    print(round(left_curverad,2), 'km', round(right_curverad, 2), 'km')
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ykm_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ykm_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+    return left_curverad, right_curverad
+
+def plot_lanes(out_img, ploty, left_fitx, right_fitx):
+
+    plt.imshow(out_img)
+    plt.plot(left_fitx, ploty, color='yellow')
+    plt.plot(right_fitx, ploty, color='yellow')
+    plt.xlim(0, 1280)
+    plt.ylim(720, 0)
+    plt.show()
+
+
 
 if __name__ == '__main__':
 
