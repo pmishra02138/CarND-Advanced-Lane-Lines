@@ -44,22 +44,23 @@ def corners_unwarp(img, cal_file):
 
     # Get the transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
+    # Get the inverse transform matrix
+    Minv = cv2.getPerspectiveTransform(dst, src)
     # Warp your image to a top-down view
     warped = cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
 
-    return warped, M, src
+    return warped, M, Minv, src
 
 if __name__ == '__main__':
 
     # Read in the saved camera matrix and distortion coefficients
-    dist_pickle = pickle.load( open( "pickle_data/camera_cal.p", "rb" ) )
-    mtx, dist = dist_pickle["mtx"], dist_pickle["dist"]
+    cal_file = "pickle_data/camera_cal.p"
 
     # Read in an image
     img = cv2.imread('test_images/straight_lines1.jpg')
 
     #top_down, perspective_M, src = corners_unwarp(img, mtx, dist)
-    warped, perspective_M, src = corners_unwarp(img, mtx, dist)
+    warped, perspective_M, Minv, src = corners_unwarp(img, cal_file)
     f, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 9))
     f.tight_layout()
 
