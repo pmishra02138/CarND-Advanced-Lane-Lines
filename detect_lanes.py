@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import cv2
 import glob
+import time
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 
@@ -87,14 +88,7 @@ def sliding_window(binary_warped):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
-    # Visualize lanes and fitted polynomial
-    plot_lanes(out_img, ploty, left_fitx, right_fitx)
-
-    # Define y-value where we want radius of curvature
-    # I'll choose the maximum y-value, corresponding to the bottom of the image
-    left_rad, right_rad = calculate_curvature(ploty, left_fitx, right_fitx)
-
-    print(round(left_rad,2), 'km', round(right_rad, 2), 'km')
+    return out_img, ploty, left_fitx, right_fitx
 
 def calculate_curvature(ploty, left_fitx, right_fitx):
 
@@ -117,14 +111,17 @@ def calculate_curvature(ploty, left_fitx, right_fitx):
 
 def plot_lanes(out_img, ploty, left_fitx, right_fitx):
 
+    plt.figure()
     plt.imshow(out_img)
     plt.plot(left_fitx, ploty, color='yellow')
     plt.plot(right_fitx, ploty, color='yellow')
     plt.xlim(0, 1280)
     plt.ylim(720, 0)
-    plt.show()
 
-
+    # Display every plto for 2 secs
+    plt.show(block=False)
+    time.sleep(2)
+    plt.close()
 
 if __name__ == '__main__':
 
@@ -132,11 +129,23 @@ if __name__ == '__main__':
     cal_file = "pickle_data/camera_cal.p"
 
     # Read in an image
-    img = cv2.imread('test_images/straight_lines2.jpg')
+    image_files = glob.glob('test_images/*.jpg')
 
-    # Binary color transform
-    color_binary, combined_binary = color_pipeline(img)
-    # Undistort and apply perspective the image
-    binary_warped, perspective_M, src = corners_unwarp(combined_binary, cal_file)
+    # Go through every file
+    for image_file in image_files:
+        img = cv2.imread(image_file)
+        # Binary color transform
+        color_binary, combined_binary = color_pipeline(img)
+        # Undistort and apply perspective the image
+        binary_warped, perspective_M, src = corners_unwarp(combined_binary, cal_file)
 
-    sliding_window(binary_warped)
+        # Sliding window for detecting lanes
+        out_img, ploty, left_fitx, right_fitx = sliding_window(binary_warped)
+
+        # Visualize lanes and fitted polynomial
+        plot_lanes(out_img, ploty, left_fitx, right_fitx)
+
+        # Calulate radius of curvature
+        left_rad, right_rad = calculate_curvature(ploty, left_fitx, right_fitx)
+
+        print(round(left_rad,2), 'km', round(right_rad, 2), 'km')
