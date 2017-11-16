@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from perspective_transform import corners_unwarp
 from color_transform import color_pipeline
 
-# Consatnts for sliding windows
+# Constants for sliding windows
 NWINDOWS = 9 # Number of sliding windows
 MARGIN = 100 # Width of the windows +/- margin
 MINPIX = 50 # Minimum number of pixels found to recenter window
@@ -90,7 +90,7 @@ def sliding_window(binary_warped):
 
     return out_img, ploty, left_fitx, right_fitx
 
-def calculate_curvature(ploty, left_fitx, right_fitx):
+def calculate_curvature(ploty, left_fitx, right_fitx, img_shape):
 
     # Define y-value where we want radius of curvature
     # Choose the maximum y-value, corresponding to the bottom of the image
@@ -103,11 +103,20 @@ def calculate_curvature(ploty, left_fitx, right_fitx):
     # Fit new polynomials to x,y in world space
     left_fit_cr = np.polyfit(ploty*ykm_per_pix, left_fitx*xkm_per_pix, 2)
     right_fit_cr = np.polyfit(ploty*ykm_per_pix, right_fitx*xkm_per_pix, 2)
+
     # Calculate the new radii of curvature
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ykm_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ykm_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
 
-    return left_curverad, right_curverad
+    # Calculate camera offset from center
+    x_center = (img_shape[1]/2)*xkm_per_pix
+    ymax = (img_shape[0])*ykm_per_pix
+    left_pt = left_fit_cr[0]*ymax**2 + left_fit_cr[1]*ymax + left_fit_cr[2]
+    right_pt = right_fit_cr[0]*ymax**2 + right_fit_cr[1]*ymax + right_fit_cr[2]
+    lane_distance = abs(left_pt - right_pt)*1000
+    center_offset = ((left_pt + right_pt)/2 - x_center) *1000
+
+    return left_curverad, right_curverad, center_offset, lane_distance
 
 def plot_lanes(out_img, ploty, left_fitx, right_fitx):
 
@@ -140,37 +149,97 @@ def highlight_lanes(img, binary_warped, Minv, ploty, left_fitx, right_fitx):
     newwarp = cv2.warpPerspective(color_warp, Minv, (img.shape[1], img.shape[0]))
     # Combine the result with the original image
     result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
-    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+    # plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+    #
+    # # Display every plto for 2 secs
+    # plt.show(block=False)
+    # time.sleep(2)
+    # plt.close()
 
-    # Display every plto for 2 secs
-    plt.show(block=False)
-    time.sleep(2)
-    plt.close()
+    return result
+
+def detect_lanes_test_images():
+        # Read in the saved camera matrix and distortion coefficients
+        cal_file = "pickle_data/camera_cal.p"
+
+        # Read in an image
+        image_files = glob.glob('test_images/*.jpg')
+
+        # Go through every file
+        for image_file in image_files:
+            img = cv2.imread(image_file)
+            # Binary color transform
+            color_binary, combined_binary = color_pipeline(img)
+
+            # Undistort and apply perspective the image
+            binary_warped, perspective_M, Minv, src = corners_unwarp(combined_binary, cal_file)
+
+            # Sliding window for detecting lanes
+            out_img, ploty, left_fitx, right_fitx = sliding_window(binary_warped)
+            # Calculate radius of curvature
+            left_rad, right_rad, center_offset, lane_distance = calculate_curvature(ploty, left_fitx, right_fitx, out_img.shape)
+            # print(round(left_rad,2), 'km', round(right_rad, 2), 'km')
+
+            # Visualize lanes and fitted polynomial
+            plot_lanes(out_img, ploty, left_fitx, right_fitx)
+
+            # Create an image to draw the lines on
+            result = highlight_lanes(img, binary_warped, Minv, ploty, left_fitx, right_fitx)
+
+        return result
+
+Lane = {"left_fitx": None, "right_fitx": None, "left_rad": None, "right_rad": None, "center_offset": None}
+
+def detect_lanes_video(img):
+
+    # Binary color transform
+    color_binary, combined_binary = color_pipeline(img)
+
+    # Undistort and apply perspective the image
+    cal_file = "pickle_data/camera_cal.p"
+    binary_warped, perspective_M, Minv, src = corners_unwarp(combined_binary, cal_file)
+
+    # Sliding window for detecting lanes
+    out_img, ploty, left_fitx, right_fitx = sliding_window(binary_warped)
+
+    # Calculate the lane curvatures and car's center offset
+    left_rad, right_rad, center_offset, lane_distance = calculate_curvature(ploty, left_fitx, right_fitx, out_img.shape)
+
+    # Sanity check for detected lanes
+    if (lane_distance < 3.5) or (lane_distance > 4.2) or (abs(center_offset) > 0.5):
+        left_fitx = Lane["left_fitx"]
+        right_fitx = Lane["right_fitx"]
+        left_rad = Lane["left_rad"]
+        right_rad = Lane["right_rad"]
+        center_offset = Lane["center_offset"]
+
+
+    Lane["left_fitx"] = left_fitx
+    Lane["right_fitx"] = right_fitx
+    Lane["left_rad"] = left_rad
+    Lane["right_rad"] = right_rad
+    Lane["center_offset"] = center_offset
+
+    # Highlight the area between lanes
+    result = highlight_lanes(img, binary_warped, Minv, ploty, left_fitx, right_fitx)
+
+    # Show left and right curvature and vechicle center offset
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fontColor = (255, 255, 255)
+    cv2.putText(result, 'Left curvature: {:.2f} km'.format(left_rad), (20, 50), font, 1, fontColor, 2)
+    cv2.putText(result, 'Right curvature: {:.2f} km'.format(right_rad), (20, 100), font, 1, fontColor, 2)
+    cv2.putText(result, 'Vehicle center offset {:.2f} m'.format(center_offset), (20, 150), font, 1, fontColor, 2)
+
+    return result
+
 
 if __name__ == '__main__':
+    # Test lane detection in test images()
+    # detect_lanes_test_images()
+    from moviepy.editor import VideoFileClip
 
-    # Read in the saved camera matrix and distortion coefficients
-    cal_file = "pickle_data/camera_cal.p"
-
-    # Read in an image
-    image_files = glob.glob('test_images/*.jpg')
-
-    # Go through every file
-    for image_file in image_files:
-        img = cv2.imread(image_file)
-        # Binary color transform
-        color_binary, combined_binary = color_pipeline(img)
-        # Undistort and apply perspective the image
-        binary_warped, perspective_M, Minv, src = corners_unwarp(combined_binary, cal_file)
-
-        # Sliding window for detecting lanes
-        out_img, ploty, left_fitx, right_fitx = sliding_window(binary_warped)
-        # Calulate radius of curvature
-        left_rad, right_rad = calculate_curvature(ploty, left_fitx, right_fitx)
-        # print(round(left_rad,2), 'km', round(right_rad, 2), 'km')
-
-        # Visualize lanes and fitted polynomial
-        plot_lanes(out_img, ploty, left_fitx, right_fitx)
-
-        # Create an image to draw the lines on
-        highlight_lanes(img, binary_warped, Minv, ploty, left_fitx, right_fitx)
+    output_video = 'output_images/lanes_output.mp4'
+    clip1 = VideoFileClip("output_images/lanes.mp4")
+    # clip1 = VideoFileClip("output_images/lanes.mp4").subclip(0, 10)
+    clip = clip1.fl_image(detect_lanes_video)
+    clip.write_videofile(output_video, audio=False)
