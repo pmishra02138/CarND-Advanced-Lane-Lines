@@ -238,8 +238,11 @@ if __name__ == '__main__':
     # detect_lanes_test_images()
     from moviepy.editor import VideoFileClip
 
-    output_video = 'output_images/lanes_output.mp4'
-    clip1 = VideoFileClip("output_images/lanes.mp4")
+    # output_video = 'output_images/lanes_output.mp4'
+    # clip1 = VideoFileClip("output_images/lanes.mp4")
+    output_video = 'output_images/lanes_output_2.mp4'
+    clip1 = VideoFileClip("challenge_video.mp4")
+
     # clip1 = VideoFileClip("output_images/lanes.mp4").subclip(0, 10)
     clip = clip1.fl_image(detect_lanes_video)
     clip.write_videofile(output_video, audio=False)
